@@ -14,7 +14,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_INPUT = (
     "EXACT2026_dataset_2026-05-15/"
     "Physics_Problems_Text_Only/"
@@ -26,6 +25,7 @@ DEFAULT_OUTPUT = "outputs/task2_gemma4_e2b_baseline.json"
 SYSTEM_PROMPT = """<|think|>
 You are a careful physics problem solver.
 Use only the information stated in the problem.
+Make sure to think carefully before answering.
 Solve step by step, track units, and return exactly one JSON object with these keys:
 - "answer": the final numeric or symbolic answer only
 - "unit": the final unit only, or an empty string if dimensionless
@@ -40,7 +40,9 @@ def parse_args() -> argparse.Namespace:
         description="Run a Task 2 physics baseline with a local Ollama model."
     )
     parser.add_argument("--input", default=DEFAULT_INPUT, help="Task 2 CSV path.")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Prediction JSON path.")
+    parser.add_argument(
+        "--output", default=DEFAULT_OUTPUT, help="Prediction JSON path."
+    )
     parser.add_argument(
         "--model",
         default="gemma4:e2b-it-q4_K_M",
@@ -221,7 +223,7 @@ def main() -> int:
 
     rows = load_rows(input_path)
     end = None if args.limit is None else args.start + args.limit
-    selected = list(enumerate(rows))[args.start:end]
+    selected = list(enumerate(rows))[args.start : end]
     seen = existing_keys(output_path) if args.resume else set()
 
     predictions: list[dict[str, Any]] = []
@@ -236,7 +238,9 @@ def main() -> int:
             continue
 
         done += 1
-        print(f"[{done}/{total_rows}] row={row_index} id={row.get('id', '')}", flush=True)
+        print(
+            f"[{done}/{total_rows}] row={row_index} id={row.get('id', '')}", flush=True
+        )
         user_prompt = build_user_prompt(row)
         raw_response = call_ollama(
             args.ollama_url,

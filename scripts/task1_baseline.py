@@ -13,22 +13,23 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_INPUT = (
     "EXACT2026_dataset_2026-05-15/"
     "Logic_Based_Educational_Queries_Text_Only/"
     "Logic_Based_Educational_Queries.json"
 )
 DEFAULT_OUTPUT = "outputs/task1_gemma4_e2b_baseline.json"
-VALID_ANSWERS = ("Yes", "No", "Unknown")
+VALID_ANSWERS = ("Yes", "No", "Unknown", "A", "B", "C", "D")
 
 
 SYSTEM_PROMPT = """<|think|>
 You are a careful logic reasoner for educational logic queries.
 Use only the stated premises. Do not use outside facts.
 For each question, decide whether the queried statement follows from the premises.
+Make sure to think carefully before answering.
+Utilize the provided premises to make your reasoning.
 Return exactly one JSON object with these keys:
-- "answer": one of "Yes", "No", or "Unknown"
+- "answer": one of "Yes", "No", or "Unknown" for Yes No question and "A", "B", "C", "D" for multiple choice questions
 - "explanation": a concise logical explanation for the answer
 
 Answer rules:
@@ -42,8 +43,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run a Task 1 baseline with a local Ollama model."
     )
-    parser.add_argument("--input", default=DEFAULT_INPUT, help="Task 1 input JSON path.")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Prediction JSON path.")
+    parser.add_argument(
+        "--input", default=DEFAULT_INPUT, help="Task 1 input JSON path."
+    )
+    parser.add_argument(
+        "--output", default=DEFAULT_OUTPUT, help="Prediction JSON path."
+    )
     parser.add_argument(
         "--model",
         default="gemma4:e2b-it-q4_K_M",
@@ -120,7 +125,8 @@ def build_user_prompt(record: dict[str, Any], question: str, include_fol: bool) 
 
     if include_fol:
         fol_lines = "\n".join(
-            f"{i}. {premise}" for i, premise in enumerate(record["premises-FOL"], start=1)
+            f"{i}. {premise}"
+            for i, premise in enumerate(record["premises-FOL"], start=1)
         )
         parts.extend(["", "Premises in first-order logic:", fol_lines])
 
@@ -245,10 +251,12 @@ def main() -> int:
 
     records = load_json(input_path)
     if not isinstance(records, list):
-        raise TypeError(f"Expected input JSON to be a list, got {type(records).__name__}")
+        raise TypeError(
+            f"Expected input JSON to be a list, got {type(records).__name__}"
+        )
 
     end = None if args.limit is None else args.start + args.limit
-    selected = list(enumerate(records))[args.start:end]
+    selected = list(enumerate(records))[args.start : end]
     seen = existing_keys(output_path) if args.resume else set()
 
     predictions: list[dict[str, Any]] = []
