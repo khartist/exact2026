@@ -6,3 +6,4 @@ __pycache__/
 # Local competition data and generated predictions
 EXACT2026_dataset_2026-05-15/
 outputs/
+eval/

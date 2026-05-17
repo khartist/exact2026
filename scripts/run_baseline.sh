@@ -10,11 +10,13 @@ Usage:
   ./scripts/run_baseline.sh task2-test
   ./scripts/run_baseline.sh task1 [limit]
   ./scripts/run_baseline.sh task2 [limit]
+  ./scripts/run_baseline.sh eval INPUT_JSON OUTPUT_JSON [task1|task2|auto]
 
 Examples:
   ./scripts/run_baseline.sh setup
   ./scripts/run_baseline.sh task1 10
   ./scripts/run_baseline.sh task2
+  ./scripts/run_baseline.sh eval outputs/task1_smoke_limit1.json eval/task1_p1.json
 EOF
 }
 
@@ -57,6 +59,16 @@ case "$cmd" in
     else
       "$python_bin" scripts/task2_baseline.py --resume
     fi
+    ;;
+  eval)
+    input="${2:-}"
+    output="${3:-}"
+    task="${4:-auto}"
+    if [[ -z "$input" || -z "$output" ]]; then
+      usage
+      exit 1
+    fi
+    "$python_bin" scripts/evaluate.py --input "$input" --output "$output" --task "$task"
     ;;
   *)
     usage

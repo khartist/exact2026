@@ -10,6 +10,12 @@ The scripts currently support:
 Both runners call the local Ollama chat API at `http://localhost:11434/api/chat`
 and default to the model tag `gemma4:e2b-it-q4_K_M`.
 
+Task 1 reads the JSON dataset and writes one model `answer`, source
+`correct_answer`, model `explanation`, source `correct_explanation`, and
+`raw_response` per question. Task 2 reads the physics CSV and writes one
+numeric/symbolic `answer`, `unit`, `explanation`, and `raw_response` per row;
+it prompts with the `question` field only.
+
 ## Requirements
 
 Install these if they are not already available on your machine:
@@ -87,6 +93,34 @@ outputs/task2_smoke_limit1.json
 
 The `outputs/` directory is ignored by Git.
 
+## Evaluation
+
+Evaluate a pre-run output JSON with P1 exact match:
+
+```bash
+./scripts/run_baseline.sh eval outputs/task1_smoke_limit1.json eval/task1_smoke_p1.json
+./scripts/run_baseline.sh eval outputs/task2_smoke_limit1.json eval/task2_smoke_p1.json
+```
+
+The evaluator accepts either a top-level `{"predictions": [...]}` object or a
+plain list of sample objects. By default it infers the task per sample from the
+available fields. You can override task detection:
+
+```bash
+.venv/bin/python scripts/evaluate.py \
+  --input outputs/task1_smoke_limit1.json \
+  --output eval/task1_smoke_p1.json \
+  --task task1
+```
+
+P1 exact match currently uses:
+
+- Task 1: `answer == correct_answer`
+- Task 2: `answer == correct_ans` and `unit == correct_unit`
+
+Each evaluation JSON contains per-sample correctness, field comparisons,
+missing-field errors, total sample count, correct sample count, and accuracy.
+
 ## Direct Commands
 
 Task 1:
@@ -97,12 +131,24 @@ Task 1:
 .venv/bin/python scripts/task1_baseline.py
 ```
 
+The default Task 1 output path is:
+
+```text
+outputs/task1_gemma4_e2b_baseline.json
+```
+
 Task 2:
 
 ```bash
 .venv/bin/python scripts/task2_baseline.py --limit 1
 .venv/bin/python scripts/task2_baseline.py --limit 10
 .venv/bin/python scripts/task2_baseline.py
+```
+
+The default Task 2 output path is:
+
+```text
+outputs/task2_gemma4_e2b_baseline.json
 ```
 
 Useful shared options:
@@ -143,4 +189,6 @@ just task1-10
 just task2-10
 just task1
 just task2
+just eval-task1
+just eval-task2
 ```
