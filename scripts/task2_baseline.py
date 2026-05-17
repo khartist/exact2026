@@ -30,6 +30,7 @@ Solve step by step, track units, and return exactly one JSON object with these k
 - "answer": the final numeric or symbolic answer only
 - "unit": the final unit only, or an empty string if dimensionless
 - "explanation": a concise derivation explaining the formula, substitutions, and unit conversion
+Use plain text math in JSON string values. Do not use LaTeX commands or backslashes.
 
 Do not include markdown. Do not include extra keys.
 """
@@ -154,7 +155,9 @@ def call_ollama(
     except requests.RequestException as exc:
         raise RuntimeError(f"Failed to call Ollama at {url}: {exc}") from exc
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Ollama returned non-JSON response: {response.text}") from exc
+        raise RuntimeError(
+            f"Ollama returned non-JSON response: {response.text}"
+        ) from exc
 
     try:
         return body["message"]["content"]
@@ -181,7 +184,60 @@ def extract_json_object(text: str) -> dict[str, Any] | None:
             continue
         if isinstance(parsed, dict):
             return parsed
+
+    for candidate in candidates:
+        parsed = extract_json_like_fields(candidate, ("answer", "unit", "explanation"))
+        if parsed:
+            return parsed
     return None
+
+
+def extract_json_like_fields(text: str, keys: tuple[str, ...]) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for key in keys:
+        value = extract_json_like_string_field(text, key)
+        if value is not None:
+            parsed[key] = value
+    return parsed
+
+
+def extract_json_like_string_field(text: str, key: str) -> str | None:
+    quoted = re.search(
+        rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"',
+        text,
+        re.DOTALL,
+    )
+    if quoted:
+        return decode_json_like_string(quoted.group(1))
+
+    unquoted = re.search(
+        rf'"{re.escape(key)}"\s*:\s*([^,\n}}]+)',
+        text,
+        re.DOTALL,
+    )
+    if unquoted:
+        return unquoted.group(1).strip().strip('"')
+    return None
+
+
+def decode_json_like_string(text: str) -> str:
+    chars: list[str] = []
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char != "\\" or i + 1 >= len(text):
+            chars.append(char)
+            i += 1
+            continue
+
+        next_char = text[i + 1]
+        if next_char in {'"', "\\", "/"}:
+            chars.append(next_char)
+        else:
+            chars.append(char)
+            chars.append(next_char)
+        i += 2
+    return "".join(chars)
 
 
 def clean_scalar(value: Any) -> str:
@@ -252,6 +308,11 @@ def main() -> int:
             args.timeout,
         )
         parsed = parse_model_response(raw_response)
+
+        correct_ans = row.get("answer", [])
+        correct_cot = row.get("cot", [])
+        correct_unit = row.get("unit", [])
+
         predictions.append(
             {
                 "row_index": row_index,
@@ -261,6 +322,9 @@ def main() -> int:
                 "unit": parsed["unit"],
                 "explanation": parsed["explanation"],
                 "raw_response": raw_response,
+                "correct_ans": correct_ans,
+                "correct_cot": correct_cot,
+                "correct_unit": correct_unit,
             }
         )
         save_json(

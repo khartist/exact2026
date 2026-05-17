@@ -31,6 +31,7 @@ Utilize the provided premises to make your reasoning.
 Return exactly one JSON object with these keys:
 - "answer": one of "Yes", "No", or "Unknown" for Yes No question and "A", "B", "C", "D" for multiple choice questions
 - "explanation": a concise logical explanation for the answer
+Use plain text math in JSON string values. Do not use LaTeX commands or backslashes.
 
 Answer rules:
 - "Yes" means the statement is entailed by the premises.
@@ -205,7 +206,60 @@ def extract_json_object(text: str) -> dict[str, Any] | None:
             continue
         if isinstance(parsed, dict):
             return parsed
+
+    for candidate in candidates:
+        parsed = extract_json_like_fields(candidate, ("answer", "explanation"))
+        if parsed:
+            return parsed
     return None
+
+
+def extract_json_like_fields(text: str, keys: tuple[str, ...]) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for key in keys:
+        value = extract_json_like_string_field(text, key)
+        if value is not None:
+            parsed[key] = value
+    return parsed
+
+
+def extract_json_like_string_field(text: str, key: str) -> str | None:
+    quoted = re.search(
+        rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"',
+        text,
+        re.DOTALL,
+    )
+    if quoted:
+        return decode_json_like_string(quoted.group(1))
+
+    unquoted = re.search(
+        rf'"{re.escape(key)}"\s*:\s*([^,\n}}]+)',
+        text,
+        re.DOTALL,
+    )
+    if unquoted:
+        return unquoted.group(1).strip().strip('"')
+    return None
+
+
+def decode_json_like_string(text: str) -> str:
+    chars: list[str] = []
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char != "\\" or i + 1 >= len(text):
+            chars.append(char)
+            i += 1
+            continue
+
+        next_char = text[i + 1]
+        if next_char in {'"', "\\", "/"}:
+            chars.append(next_char)
+        else:
+            chars.append(char)
+            chars.append(next_char)
+        i += 2
+    return "".join(chars)
 
 
 def normalize_answer(value: Any, raw_text: str) -> str:
@@ -304,6 +358,14 @@ def main() -> int:
                 if question_index < len(correct_answers)
                 else None
             )
+
+            correct_explanation = record.get("explanation", [])
+            correct_explanation = (
+                correct_explanation[question_index]
+                if question_index < len(correct_explanation)
+                else None
+            )
+
             predictions.append(
                 {
                     "record_index": record_index,
@@ -311,6 +373,7 @@ def main() -> int:
                     "question": question,
                     "answer": parsed["answer"],
                     "correct_answer": correct_answer,
+                    "correct_explanation": correct_explanation,
                     "explanation": parsed["explanation"],
                     "raw_response": raw_response,
                 }
