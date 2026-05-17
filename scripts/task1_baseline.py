@@ -176,7 +176,9 @@ def call_ollama(
     except requests.RequestException as exc:
         raise RuntimeError(f"Failed to call Ollama at {url}: {exc}") from exc
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Ollama returned non-JSON response: {response.text}") from exc
+        raise RuntimeError(
+            f"Ollama returned non-JSON response: {response.text}"
+        ) from exc
 
     try:
         return body["message"]["content"]
@@ -212,10 +214,18 @@ def normalize_answer(value: Any, raw_text: str) -> str:
         if text.lower() == answer.lower():
             return answer
 
-    match = re.search(r"\b(yes|no|unknown)\b", raw_text, re.IGNORECASE)
+    match = re.search(r"\b(yes|no|unknown|A|B|C|D)\b", raw_text, re.IGNORECASE)
     if match:
         word = match.group(1).lower()
-        return {"yes": "Yes", "no": "No", "unknown": "Unknown"}[word]
+        return {
+            "yes": "Yes",
+            "no": "No",
+            "unknown": "Unknown",
+            "a": "A",
+            "b": "B",
+            "c": "C",
+            "d": "D",
+        }[word]
     return "Unknown"
 
 
@@ -288,12 +298,19 @@ def main() -> int:
                 args.timeout,
             )
             parsed = parse_model_response(raw_response)
+            correct_answers = record.get("answers", [])
+            correct_answer = (
+                correct_answers[question_index]
+                if question_index < len(correct_answers)
+                else None
+            )
             predictions.append(
                 {
                     "record_index": record_index,
                     "question_index": question_index,
                     "question": question,
                     "answer": parsed["answer"],
+                    "correct_answer": correct_answer,
                     "explanation": parsed["explanation"],
                     "raw_response": raw_response,
                 }
