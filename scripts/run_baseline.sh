@@ -33,6 +33,7 @@ fi
 case "$cmd" in
   setup)
     python3 -m venv .venv
+    .venv/bin/python -m pip install -r requirements.txt
     ;;
   check)
     "$python_bin" -m py_compile scripts/task1_baseline.py scripts/task2_baseline.py

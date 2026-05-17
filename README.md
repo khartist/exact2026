@@ -31,6 +31,9 @@ Use the helper script:
 ./scripts/run_baseline.sh setup
 ```
 
+This creates `.venv/` and installs the Python dependencies from
+`requirements.txt`.
+
 ## Quick Tests
 
 Run Task 1 on the first record:
@@ -89,17 +92,17 @@ The `outputs/` directory is ignored by Git.
 Task 1:
 
 ```bash
-python3 scripts/task1_baseline.py --limit 1
-python3 scripts/task1_baseline.py --limit 10
-python3 scripts/task1_baseline.py
+.venv/bin/python scripts/task1_baseline.py --limit 1
+.venv/bin/python scripts/task1_baseline.py --limit 10
+.venv/bin/python scripts/task1_baseline.py
 ```
 
 Task 2:
 
 ```bash
-python3 scripts/task2_baseline.py --limit 1
-python3 scripts/task2_baseline.py --limit 10
-python3 scripts/task2_baseline.py
+.venv/bin/python scripts/task2_baseline.py --limit 1
+.venv/bin/python scripts/task2_baseline.py --limit 10
+.venv/bin/python scripts/task2_baseline.py
 ```
 
 Useful shared options:
@@ -124,7 +127,7 @@ The baseline does not require `uv` or `just`. If you prefer them, install from:
 Optional `uv` commands:
 
 ```bash
-uv venv --python 3.11
+uv sync
 uv run python scripts/task1_baseline.py --limit 1
 uv run python scripts/task2_baseline.py --limit 1
 ```
@@ -141,4 +144,3 @@ just task2-10
 just task1
 just task2
 ```
-# exact2026

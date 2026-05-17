@@ -8,10 +8,10 @@ import json
 import re
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any
+
+import requests
 
 DEFAULT_INPUT = (
     "EXACT2026_dataset_2026-05-15/"
@@ -158,23 +158,25 @@ def call_ollama(
         ],
         "options": {"temperature": temperature},
     }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")
+        response = requests.post(url, json=payload, timeout=timeout)
+        response.raise_for_status()
+        body = response.json()
+    except requests.HTTPError as exc:
+        response = exc.response
+        status = (
+            f"HTTP {response.status_code} {response.reason}"
+            if response is not None
+            else "HTTP error"
+        )
+        error_body = response.text if response is not None else ""
         raise RuntimeError(
-            f"Failed to call Ollama at {url}: HTTP {exc.code} {exc.reason}. "
-            f"Body: {error_body}"
+            f"Failed to call Ollama at {url}: {status}. Body: {error_body}"
         ) from exc
-    except urllib.error.URLError as exc:
+    except requests.RequestException as exc:
         raise RuntimeError(f"Failed to call Ollama at {url}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Ollama returned non-JSON response: {response.text}") from exc
 
     try:
         return body["message"]["content"]

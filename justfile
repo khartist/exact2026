@@ -1,7 +1,7 @@
 set shell := ["bash", "-cu"]
 
 setup:
-    uv venv --python 3.11
+    uv sync
 
 check:
     uv run python -m py_compile scripts/task1_baseline.py scripts/task2_baseline.py
@@ -23,4 +23,3 @@ task1:
 
 task2:
     uv run python scripts/task2_baseline.py --resume
-
