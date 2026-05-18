@@ -10,12 +10,14 @@ Usage:
   ./scripts/run_baseline.sh task2-test
   ./scripts/run_baseline.sh task1 [limit]
   ./scripts/run_baseline.sh task2 [limit]
+  ./scripts/run_baseline.sh unified INPUT_JSON OUTPUT_JSON [limit]
   ./scripts/run_baseline.sh eval INPUT_JSON OUTPUT_JSON [task1|task2|auto]
 
 Examples:
   ./scripts/run_baseline.sh setup
   ./scripts/run_baseline.sh task1 10
   ./scripts/run_baseline.sh task2
+  ./scripts/run_baseline.sh unified unified_input.json outputs/unified.json 10
   ./scripts/run_baseline.sh eval outputs/task1_smoke_limit1.json eval/task1_p1.json
 EOF
 }
@@ -38,7 +40,8 @@ case "$cmd" in
     .venv/bin/python -m pip install -r requirements.txt
     ;;
   check)
-    "$python_bin" -m py_compile scripts/task1_baseline.py scripts/task2_baseline.py
+    "$python_bin" -m py_compile scripts/task1_baseline.py scripts/task2_baseline.py scripts/evaluate.py scripts/unified_api.py
+    "$python_bin" -m unittest discover -s tests
     ;;
   task1-test)
     "$python_bin" scripts/task1_baseline.py --limit 1 --output outputs/task1_smoke_limit1.json
@@ -58,6 +61,20 @@ case "$cmd" in
       "$python_bin" scripts/task2_baseline.py --limit "$limit"
     else
       "$python_bin" scripts/task2_baseline.py --resume
+    fi
+    ;;
+  unified)
+    input="${2:-}"
+    output="${3:-}"
+    limit="${4:-}"
+    if [[ -z "$input" || -z "$output" ]]; then
+      usage
+      exit 1
+    fi
+    if [[ -n "$limit" ]]; then
+      "$python_bin" scripts/unified_api.py --input "$input" --output "$output" --limit "$limit"
+    else
+      "$python_bin" scripts/unified_api.py --input "$input" --output "$output"
     fi
     ;;
   eval)

@@ -93,6 +93,59 @@ outputs/task2_smoke_limit1.json
 
 The `outputs/` directory is ignored by Git.
 
+## Unified API Format
+
+The official test set can mix Type 1 and Type 2 samples in one JSON stream.
+Use `scripts/unified_api.py` for that format. The unified API only shares input
+loading and routing; Type 1 and Type 2 still use their task-specific solver
+prompts and response parsers.
+
+Type 1 samples contain non-empty `premises-NL` and `question`:
+
+```json
+{
+  "premises-NL": ["If A then B.", "A is true."],
+  "question": "Does B follow?"
+}
+```
+
+Type 2 samples only need `question`:
+
+```json
+{
+  "question": "Calculate the energy stored in capacitor C."
+}
+```
+
+The router detects Type 1 when `premises-NL` exists and is non-empty. Missing
+or empty `premises-NL` is routed to Type 2. The loader accepts a plain list of
+samples, a single sample object, or an object containing `queries`, `samples`,
+`inputs`, or `data`.
+
+Run unified samples:
+
+```bash
+./scripts/run_baseline.sh unified unified_input.json outputs/unified_responses.json
+```
+
+With `just`:
+
+```bash
+just unified unified_input.json outputs/unified_responses.json
+```
+
+Each response is JSON-serializable and always contains at least:
+
+```json
+{
+  "answer": "...",
+  "explanation": "..."
+}
+```
+
+Optional fields such as `fol`, `cot`, `premises`, and `confidence` are included
+when available and valid.
+
 ## Evaluation
 
 Evaluate a pre-run output JSON with P1 exact match:
@@ -100,6 +153,13 @@ Evaluate a pre-run output JSON with P1 exact match:
 ```bash
 ./scripts/run_baseline.sh eval outputs/task1_smoke_limit1.json eval/task1_smoke_p1.json
 ./scripts/run_baseline.sh eval outputs/task2_smoke_limit1.json eval/task2_smoke_p1.json
+```
+
+With `just` for the smoke outputs:
+
+```bash
+just eval-task1
+just eval-task2
 ```
 
 The evaluator accepts either a top-level `{"predictions": [...]}` object or a
@@ -189,6 +249,7 @@ just task1-10
 just task2-10
 just task1
 just task2
+just unified unified_input.json outputs/unified_responses.json
 just eval-task1
 just eval-task2
 ```

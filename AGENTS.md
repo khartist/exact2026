@@ -20,6 +20,7 @@ The default local model is `gemma4:e2b-it-q4_K_M`, called through Ollama at
 - `scripts/task1_baseline.py`: Task 1 baseline runner.
 - `scripts/task2_baseline.py`: Task 2 baseline runner.
 - `scripts/evaluate.py`: Modular evaluation CLI, currently with P1 exact match.
+- `scripts/unified_api.py`: Official unified Type 1/Type 2 API router.
 - `scripts/run_baseline.sh`: Convenience wrapper that does not require `just`.
 - `README.md`: User-facing setup, run, and evaluation instructions.
 - `justfile`: Optional shortcuts for users with `just`.
@@ -77,6 +78,12 @@ Evaluation:
 ./scripts/run_baseline.sh eval outputs/task2_smoke_limit1.json eval/task2_smoke_p1.json
 ```
 
+Unified official API-format run:
+
+```bash
+./scripts/run_baseline.sh unified unified_input.json outputs/unified_responses.json
+```
+
 Optional `uv`/`just` commands exist in `README.md`, but do not require those
 tools for normal changes unless the user asks.
 
@@ -100,6 +107,22 @@ Task 2:
   `correct_ans`, `correct_cot`, and `correct_unit`.
 
 Both baselines use `requests.post(..., json=payload)` for Ollama calls.
+
+## Unified API Behavior
+
+`scripts/unified_api.py` handles the official merged input stream but keeps
+Type 1 and Type 2 solving separate.
+
+- Type 1 is detected when `premises-NL` exists and is non-empty.
+- Missing or empty `premises-NL` is routed to Type 2.
+- Type 1 routes to the existing Task 1 prompt/parser from `task1_baseline.py`.
+- Type 2 routes to the existing Task 2 prompt/parser from `task2_baseline.py`.
+- The loader accepts a plain list, a single sample object, or an object with
+  `queries`, `samples`, `inputs`, or `data`.
+- Each response must include JSON-serializable `answer` and `explanation`.
+- Optional response fields are kept only when valid:
+  `fol` string, `cot` list of strings, `premises` list of strings, and
+  `confidence` number between 0 and 1.
 
 ## Output Parsing Gotcha
 
@@ -152,6 +175,7 @@ task-specific behavior separated from aggregate reporting.
 - Preserve existing JSON output shapes unless the user asks to change them.
 - Keep generated artifacts out of Git.
 - Run `./scripts/run_baseline.sh check` before finalizing code changes.
+- Add or update tests under `tests/` for unified API behavior.
 
 ## Git Notes
 

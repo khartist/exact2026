@@ -1,0 +1,14 @@
+[
+  {
+    "premises-NL": [
+      "If a student completes all required courses, then they are eligible for graduation.",
+      "If a student is eligible for graduation and maintains a GPA above 3.5, then they graduate with honors.",
+      "Maya has completed all required courses.",
+      "Maya maintains a GPA of 3.8."
+    ],
+    "question": "Does Maya graduate with honors, according to the premises?"
+  },
+  {
+    "question": "Calculate the energy stored in a capacitor when C = 100 microfarads and U = 30 V."
+  }
+]
