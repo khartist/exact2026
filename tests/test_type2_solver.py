@@ -160,15 +160,82 @@ class Type2SolverTests(unittest.TestCase):
         self.assertTrue(result.metadata["verified"])
 
     def test_planner_produces_series_of_steps(self) -> None:
+        def model_complete(system_prompt: str, user_prompt: str) -> str:
+            if "planner agent" in system_prompt:
+                return json.dumps(
+                    {
+                        "action": "formula_bank",
+                        "formula_id": "series_rlc_impedance",
+                        "steps": [
+                            "Identify the given values R = 12 Ω, L = 0.2 H, C = 50 μF, and f = 50 Hz.",
+                            "Convert C to farads and compute X_L = 2πfL.",
+                            "Compute X_C = 1/(2πfC).",
+                            "Combine the reactances and resistance to compute Z = sqrt(R**2 + (X_L - X_C)**2).",
+                            "Return the impedance in ohms.",
+                        ],
+                        "reason": "The series RLC circuit requires a multi-step calculation.",
+                    }
+                )
+            if "code generator agent" in system_prompt:
+                return json.dumps(
+                    {
+                        "code": "\n".join(
+                            [
+                                "steps = []",
+                                "premises = []",
+                                "C = 50e-6",
+                                "X_L = 2*math.pi*f*L",
+                                "steps.append('Compute X_L = 2πfL.')",
+                                "X_C = 1/(2*math.pi*f*C)",
+                                "steps.append('Compute X_C = 1/(2πfC).')",
+                                "answer = math.sqrt(R**2 + (X_L - X_C)**2)",
+                                "unit = 'Ω'",
+                                "steps.append('Compute Z = sqrt(R**2 + (X_L - X_C)**2).')",
+                                "premises.append('X_L = 2πfL')",
+                                "premises.append('X_C = 1/(2πfC)')",
+                                "premises.append('Z = sqrt(R**2 + (X_L - X_C)**2)')",
+                            ]
+                        )
+                    }
+                )
+            if "reviewer agent" in system_prompt:
+                return json.dumps(
+                    {
+                        "passed": True,
+                        "confidence": 0.81,
+                        "errors": [],
+                        "feedback": "The generated plan is problem-specific and the execution is consistent.",
+                    }
+                )
+            if "write concise physics solution steps" in system_prompt:
+                return json.dumps(
+                    {
+                        "explanation": "Compute X_L, compute X_C, then combine them with R to get Z.",
+                        "cot": [
+                            "Identify R, L, C, and f.",
+                            "Compute X_L and X_C.",
+                            "Combine the results to get Z.",
+                        ],
+                        "premises": [
+                            "X_L = 2πfL",
+                            "X_C = 1/(2πfC)",
+                            "Z = sqrt(R**2 + (X_L - X_C)**2)",
+                        ],
+                    }
+                )
+            return "{}"
+
         result = solve_physics_question(
             "Find the impedance of a series RLC circuit with R = 12 Ω, L = 0.2 H, "
-            "C = 50 μF, and f = 50 Hz."
+            "C = 50 μF, and f = 50 Hz.",
+            model_complete=model_complete,
         )
 
         planner_steps = result.metadata["planner_steps"]
         self.assertIsInstance(planner_steps, list)
         self.assertGreaterEqual(len(planner_steps), 4)
-        self.assertTrue(any("intermediate" in step.lower() for step in planner_steps))
+        self.assertTrue(any("x_l" in step.lower() or "x_c" in step.lower() for step in planner_steps))
+        self.assertFalse(any("extract and normalize" in step.lower() for step in planner_steps))
         self.assertTrue(result.metadata["verified"])
 
 

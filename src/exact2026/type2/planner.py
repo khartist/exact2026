@@ -31,14 +31,12 @@ def build_plan(
     if not candidates:
         return None
     formula = choose_formula_with_model(parsed, candidates, model_complete) or candidates[0]
-    steps = build_steps_with_model(parsed, formula, model_complete) or build_formula_steps(
-        parsed, formula
-    )
+    steps = build_steps_with_model(parsed, formula, model_complete) or []
     return EquationPlan(
         formula_id=formula.id,
         steps=steps,
         confidence=0.95,
-        source="slm_code_plan" if steps and steps[0].source == "slm" else "formula_bank",
+        source="slm_code_plan" if steps else "formula_bank_candidates_only",
     )
 
 

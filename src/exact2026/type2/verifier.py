@@ -119,6 +119,7 @@ def build_step_expression(
     context: dict[str, float],
     keep_symbol: str,
 ) -> sp.Expr:
+    expression = normalize_namespace_prefixes(expression)
     names = extract_expression_names(expression)
     locals_map: dict[str, Any] = {
         name: sp.Symbol(name)
@@ -133,11 +134,16 @@ def build_step_expression(
         }
     )
     locals_map.update(ALLOWED_FUNCTIONS)
+    locals_map.update({"math": math, "sympy": sp, "sp": sp})
     return sp.sympify(expression, locals=locals_map)
 
 
 def extract_expression_names(expression: str) -> set[str]:
     return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", expression))
+
+
+def normalize_namespace_prefixes(expression: str) -> str:
+    return re.sub(r"\b(?:math|sympy|sp)\.", "", expression)
 
 
 def verify_forward_calculation(

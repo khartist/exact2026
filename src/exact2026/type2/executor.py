@@ -56,9 +56,11 @@ def execute_steps(plan: EquationPlan, parsed: ParsedProblem, output_unit: str) -
 
 
 def evaluate_expression(expression: str, values: dict[str, float]) -> float:
+    expression = normalize_namespace_prefixes(expression)
     assert_safe_expression(expression, values)
     locals_map = {name: sp.Float(value) for name, value in values.items()}
     locals_map.update(ALLOWED_FUNCTIONS)
+    locals_map.update({"math": math, "sympy": sp, "sp": sp})
     parsed = sp.sympify(expression, locals=locals_map)
     unresolved = parsed.free_symbols
     if unresolved:
@@ -74,9 +76,13 @@ def assert_safe_expression(expression: str, values: dict[str, float]) -> None:
     if "__" in expression:
         raise ValueError("Unsafe expression token.")
     names = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", expression))
-    allowed_names = set(values) | set(ALLOWED_FUNCTIONS)
+    allowed_names = set(values) | set(ALLOWED_FUNCTIONS) | {"math", "sympy", "sp"}
     unknown = names - allowed_names
     if unknown:
         raise ValueError(f"Expression uses unknown names: {', '.join(sorted(unknown))}")
     if re.search(r"[^A-Za-z0-9_+\-*/().,\s]", expression):
         raise ValueError("Expression contains unsupported characters.")
+
+
+def normalize_namespace_prefixes(expression: str) -> str:
+    return re.sub(r"\b(?:math|sympy|sp)\.", "", expression)
