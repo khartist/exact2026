@@ -10,6 +10,19 @@ The scripts currently support:
 Both runners call the local Ollama chat API at `http://localhost:11434/api/chat`
 and default to the model tag `gemma4:e2b-it-q4_K_M`.
 
+Task 2 now uses a LangGraph agent loop:
+
+- planner agent
+- code generator agent
+- reviewer agent
+- up to 3 loops before returning the nearest executable result
+
+The planner first queries the formula bank. If it finds a useful formula, it can
+choose a formula-bank path or continue with a multi-step executable plan. If no
+formula-bank entry fits, the planner can still generate internal solution steps
+and send them to the code generator. The reviewer combines SLM judgment with
+backward consistency checks on the executed steps.
+
 Task 1 reads the JSON dataset and writes one model `answer`, source
 `correct_answer`, model `explanation`, source `correct_explanation`, and
 `raw_response` per question. Task 2 reads the physics CSV and writes one
@@ -145,6 +158,34 @@ Each response is JSON-serializable and always contains at least:
 
 Optional fields such as `fol`, `cot`, `premises`, and `confidence` are included
 when available and valid.
+
+## FastAPI
+
+Run the unified solver as an API server:
+
+```bash
+./scripts/run_baseline.sh serve
+```
+
+With `just`:
+
+```bash
+just serve
+```
+
+With `uv` directly:
+
+```bash
+uv run uvicorn exact2026.app:app --app-dir src --host 0.0.0.0 --port 8000
+```
+
+The server exposes:
+
+- `GET /health`
+- `POST /solve`
+
+`POST /solve` accepts the same unified sample shapes as `scripts/unified_api.py`
+and returns the same response objects.
 
 ## Evaluation
 
