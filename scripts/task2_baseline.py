@@ -14,6 +14,13 @@ from typing import Any
 
 import requests
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = REPO_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from exact2026.type2.pipeline import dumps_response, solve_physics_question
+
 DEFAULT_INPUT = (
     "EXACT2026_dataset_2026-05-15/"
     "Physics_Problems_Text_Only/"
@@ -299,15 +306,25 @@ def main() -> int:
         print(
             f"[{done}/{total_rows}] row={row_index} id={row.get('id', '')}", flush=True
         )
-        user_prompt = build_user_prompt(row)
-        raw_response = call_ollama(
-            args.ollama_url,
-            args.model,
-            user_prompt,
-            args.temperature,
-            args.timeout,
+        result = solve_physics_question(
+            row.get("question", ""),
+            model_complete=lambda system_prompt, user_prompt: call_ollama(
+                args.ollama_url,
+                args.model,
+                "\n\n".join([system_prompt, user_prompt]),
+                args.temperature,
+                args.timeout,
+            ),
+            fallback_model=lambda prompt: call_ollama(
+                args.ollama_url,
+                args.model,
+                prompt,
+                args.temperature,
+                args.timeout,
+            ),
         )
-        parsed = parse_model_response(raw_response)
+        parsed = result.to_api_dict()
+        raw_response = result.raw_response or dumps_response(result)
 
         correct_ans = row.get("answer", [])
         correct_cot = row.get("cot", [])
@@ -321,6 +338,9 @@ def main() -> int:
                 "answer": parsed["answer"],
                 "unit": parsed["unit"],
                 "explanation": parsed["explanation"],
+                "cot": parsed.get("cot", []),
+                "premises": parsed.get("premises", []),
+                "confidence": parsed.get("confidence", 0),
                 "raw_response": raw_response,
                 "correct_ans": correct_ans,
                 "correct_cot": correct_cot,

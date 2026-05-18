@@ -11,8 +11,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = REPO_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 import task1_baseline
 import task2_baseline
+from exact2026.type2.pipeline import solve_physics_question
 
 
 QueryType = Literal["type1", "type2"]
@@ -175,12 +181,16 @@ def solve_type1_query(query: UnifiedQuery, model_fn: ModelFn) -> dict[str, Any]:
 
 
 def solve_type2_query(query: UnifiedQuery, model_fn: ModelFn) -> dict[str, Any]:
-    prompt = task2_baseline.build_user_prompt({"question": query.question})
-    parsed = task2_baseline.parse_model_response(model_fn(prompt, "type2"))
-    if parsed.get("unit"):
-        parsed = dict(parsed)
-        parsed["answer"] = join_answer_and_unit(parsed.get("answer"), parsed.get("unit"))
-    return normalize_api_response(parsed)
+    def model_complete(system_prompt: str, user_prompt: str) -> str:
+        prompt = "\n\n".join([system_prompt, user_prompt])
+        return model_fn(prompt, "type2")
+
+    result = solve_physics_question(
+        query.question,
+        model_complete=model_complete,
+        fallback_model=lambda prompt: model_fn(prompt, "type2"),
+    )
+    return normalize_api_response(result.to_api_dict())
 
 
 def normalize_fol(value: Any) -> str | None:
@@ -213,6 +223,7 @@ def normalize_api_response(parsed: dict[str, Any]) -> dict[str, Any]:
         "fol": normalize_optional_string,
         "cot": normalize_optional_string_list,
         "premises": normalize_optional_string_list,
+        "unit": normalize_optional_string,
         "confidence": normalize_optional_confidence,
     }
     for field, normalizer in optional_normalizers.items():
@@ -262,6 +273,8 @@ def validate_api_response(response: dict[str, Any]) -> list[str]:
         errors.append('"cot" must be a list of strings when present.')
     if "premises" in response and not is_string_list(response["premises"]):
         errors.append('"premises" must be a list of strings when present.')
+    if "unit" in response and not isinstance(response["unit"], str):
+        errors.append('"unit" must be a string when present.')
     if "confidence" in response:
         confidence = response["confidence"]
         if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):

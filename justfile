@@ -4,7 +4,7 @@ setup:
     uv sync
 
 check:
-    uv run python -m py_compile scripts/task1_baseline.py scripts/task2_baseline.py scripts/evaluate.py scripts/unified_api.py
+    uv run python -m py_compile scripts/task1_baseline.py scripts/task2_baseline.py scripts/evaluate.py scripts/unified_api.py src/exact2026/app.py
     uv run python -m unittest discover -s tests
 
 task1-test:
@@ -27,6 +27,9 @@ task2:
 
 unified input output:
     uv run python scripts/unified_api.py --input {{input}} --output {{output}}
+
+serve:
+    uv run uvicorn exact2026.app:app --app-dir src --host 0.0.0.0 --port ${PORT:-8000}
 
 eval-task1:
     uv run python scripts/evaluate.py --input outputs/task1_smoke_limit1.json --output eval/task1_smoke_p1.json

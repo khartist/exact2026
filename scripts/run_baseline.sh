@@ -12,6 +12,7 @@ Usage:
   ./scripts/run_baseline.sh task2 [limit]
   ./scripts/run_baseline.sh unified INPUT_JSON OUTPUT_JSON [limit]
   ./scripts/run_baseline.sh eval INPUT_JSON OUTPUT_JSON [task1|task2|auto]
+  ./scripts/run_baseline.sh serve
 
 Examples:
   ./scripts/run_baseline.sh setup
@@ -86,6 +87,9 @@ case "$cmd" in
       exit 1
     fi
     "$python_bin" scripts/evaluate.py --input "$input" --output "$output" --task "$task"
+    ;;
+  serve)
+    "$python_bin" -m uvicorn exact2026.app:app --app-dir src --host 0.0.0.0 --port "${PORT:-8000}"
     ;;
   *)
     usage

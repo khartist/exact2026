@@ -8,7 +8,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
-for path in (REPO_ROOT, SCRIPTS_DIR):
+SRC_DIR = REPO_ROOT / "src"
+for path in (REPO_ROOT, SCRIPTS_DIR, SRC_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -69,15 +70,20 @@ class UnifiedApiTests(unittest.TestCase):
         self.assertEqual(response["premises"], ["If A then B.", "A is true."])
 
     def test_type2_routes_to_physics_solver_prompt(self) -> None:
-        query = normalize_query({"question": "Calculate the energy stored."})
+        query = normalize_query(
+            {"question": "What is the capacitive reactance when C = 75 μF and f = 60 Hz?"}
+        )
         calls: list[tuple[str, str]] = []
 
         response = solve_unified_query(query, self.fake_model(calls))
 
-        self.assertEqual(calls[0][1], "type2")
-        self.assertIn("Physics problem:", calls[0][0])
+        self.assertTrue(calls)
+        self.assertTrue(all(call[1] == "type2" for call in calls))
         self.assertNotIn("Premises in natural language:", calls[0][0])
-        self.assertEqual(response["answer"], "0.045 J")
+        self.assertEqual(response["answer"], "35.37")
+        self.assertEqual(response["unit"], "Ω")
+        self.assertIn("cot", response)
+        self.assertIn("premises", response)
 
     def test_output_contains_answer_and_explanation(self) -> None:
         query = normalize_query(
@@ -101,6 +107,7 @@ class UnifiedApiTests(unittest.TestCase):
                 "fol": "forall x P(x)",
                 "cot": ["Step 1: Read the premises.", "Step 2: Apply the rule."],
                 "premises": ["If A then B.", "A is true."],
+                "unit": "Ω",
                 "confidence": 0.92,
             }
         )
@@ -108,6 +115,7 @@ class UnifiedApiTests(unittest.TestCase):
         self.assertIsInstance(response["fol"], str)
         self.assertTrue(all(isinstance(item, str) for item in response["cot"]))
         self.assertTrue(all(isinstance(item, str) for item in response["premises"]))
+        self.assertIsInstance(response["unit"], str)
         self.assertIsInstance(response["confidence"], (int, float))
         self.assertGreaterEqual(response["confidence"], 0)
         self.assertLessEqual(response["confidence"], 1)
@@ -135,12 +143,52 @@ class UnifiedApiTests(unittest.TestCase):
                         "confidence": 0.9,
                     }
                 )
+            if "planner agent" in prompt:
+                return json.dumps(
+                    {
+                        "action": "formula_bank",
+                        "formula_id": "capacitive_reactance",
+                        "steps": [
+                            "Extract and normalize given quantities into SI units.",
+                            "Select the capacitive reactance formula.",
+                            "Compute the final answer.",
+                        ],
+                        "reason": "The formula bank covers capacitive reactance directly.",
+                    }
+                )
+            if "code generator agent" in prompt:
+                return json.dumps(
+                    {
+                        "code": "\n".join(
+                            [
+                                "steps = []",
+                                "premises = []",
+                                "X_C = 1/(2*3.141592653589793*f*C)",
+                                "steps.append('Compute X_C = 1/(2πfC).')",
+                                "answer = X_C",
+                                "unit = 'Ω'",
+                                "steps.append('Compute the final reactance.')",
+                                "premises.append('X_C = 1/(2πfC)')",
+                            ]
+                        )
+                    }
+                )
+            if "reviewer agent" in prompt:
+                return json.dumps(
+                    {
+                        "passed": True,
+                        "confidence": 0.81,
+                        "errors": [],
+                        "feedback": "Execution and backward consistency are acceptable.",
+                    }
+                )
             return json.dumps(
                 {
-                    "answer": "0.045",
-                    "unit": "J",
-                    "explanation": "Use E = 0.5 C U^2.",
+                    "answer": "35.37",
+                    "unit": "Ω",
+                    "explanation": "Use the fallback formula.",
                     "cot": ["Step 1: Convert C.", "Step 2: Substitute values."],
+                    "premises": ["Fallback formula"],
                     "confidence": 0.8,
                 }
             )
