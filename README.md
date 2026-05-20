@@ -10,24 +10,88 @@ The scripts currently support:
 Both runners call the local Ollama chat API at `http://localhost:11434/api/chat`
 and default to the model tag `gemma4:e2b-it-q4_K_M`.
 
-Task 2 now uses a LangGraph agent loop:
+Task 2 uses a structured LangGraph pipeline:
 
 - planner agent
 - code generator agent
-- reviewer agent
-- up to 3 loops before returning the nearest executable result
+- deterministic planner validator
+- sandboxed code executor
+- deterministic execution validator
+- answer composer
 
-The planner first queries the formula bank. If it finds a useful formula, it can
-choose a formula-bank path or continue with a multi-step executable plan. If no
-formula-bank entry fits, the planner can still generate internal solution steps
-and send them to the code generator. The reviewer combines SLM judgment with
-backward consistency checks on the executed steps.
+Before planning, the pipeline runs a lightweight text search over the local
+formula/law bank. The planner receives the raw question plus the top search
+results and is responsible for extracting givens, target, units, SI
+conversions, and calculation steps. It preserves the stated value and unit in
+each given, such as `mC`, `mm`, `cm`, or `μF`; `si_value` and `si_unit` exist
+for executor consistency and only need conversion when the calculation formula
+requires consistent units. There is no regex/parser fallback that extracts
+known variables or builds a deterministic physics plan. If the planner does not
+return a valid plan, the graph returns a structured fallback and the baseline
+can then use the normal direct model fallback response path.
 
 Task 1 reads the JSON dataset and writes one model `answer`, source
 `correct_answer`, model `explanation`, source `correct_explanation`, and
 `raw_response` per question. Task 2 reads the physics CSV and writes one
 numeric/symbolic `answer`, `unit`, `explanation`, and `raw_response` per row;
 it prompts with the `question` field only.
+
+## Type 2 Structured Solver
+
+The Type 2 solver lives under `src/exact2026/type2/`.
+
+Important pieces:
+
+- `knowledge_search.py`: token-overlap text search over formulas and laws.
+- `formula_bank.py`: local trusted formula/law entries.
+- `agents/planner_agent.py`: asks the model for a machine-readable calculation
+  plan from the raw question and search context.
+- `validation/planner_validator.py`: checks plan structure and internal
+  consistency without inferring physics facts.
+- `agents/code_generator_agent.py`: generates code from the validated plan.
+- `execution/code_executor.py`: executes generated code in a restricted
+  environment.
+- `validation/execution_validator.py`: checks trace/final result consistency.
+
+The planner output shape is:
+
+```json
+{
+  "target": {"symbol": "X_C", "description": "capacitive reactance", "unit": "Ω"},
+  "givens": {
+    "C": {"value": 75, "unit": "μF", "si_value": 0.000075, "si_unit": "F"},
+    "f": {"value": 60, "unit": "Hz", "si_value": 60, "si_unit": "Hz"}
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "goal": "Compute capacitive reactance.",
+      "output": "X_C",
+      "formula_id": "capacitive_reactance",
+      "formula": "X_C = 1/(2*pi*f*C)",
+      "inputs": ["f", "C"],
+      "unit": "Ω",
+      "premise": "Capacitive reactance: X_C = 1/(2πfC)"
+    }
+  ],
+  "final_step": "s1",
+  "missing_information": [],
+  "status": "READY"
+}
+```
+
+`READY` plans must include declared givens with `value`, `unit`, `si_value`,
+and `si_unit`; step inputs must come from givens or previous outputs; formulas
+must reference only declared inputs and allowed math names. Constants such as
+`k` must be explicitly included in `givens` if used.
+The `value`/`unit` pair should match the problem statement when practical;
+converted values belong in `si_value`/`si_unit` and are optional unless the
+formula requires consistent units.
+
+Each step `premise` should state the formula or physics law used for that step.
+The planner should prefer formulas and laws from the search context, but it may
+use standard physics knowledge when the local formula bank does not contain the
+needed item.
 
 ## Requirements
 
@@ -53,6 +117,12 @@ Use the helper script:
 This creates `.venv/` and installs the Python dependencies from
 `requirements.txt`.
 
+With `uv`:
+
+```bash
+uv sync
+```
+
 ## Quick Tests
 
 Run Task 1 on the first record:
@@ -73,6 +143,9 @@ Run the first 10 records/rows:
 ./scripts/run_baseline.sh task1 10
 ./scripts/run_baseline.sh task2 10
 ```
+
+The `just task2-10` shortcut differs from the helper script: it randomly
+samples 10 Task 2 rows.
 
 ## Full Runs
 
@@ -156,8 +229,8 @@ Each response is JSON-serializable and always contains at least:
 }
 ```
 
-Optional fields such as `fol`, `cot`, `premises`, and `confidence` are included
-when available and valid.
+Optional fields such as `fol`, `cot`, and `premises` are included when
+available and valid. Type 2 responses do not include a confidence score.
 
 ## FastAPI
 
@@ -186,6 +259,24 @@ The server exposes:
 
 `POST /solve` accepts the same unified sample shapes as `scripts/unified_api.py`
 and returns the same response objects.
+
+## Type 2 Debugging
+
+Print the Type 2 graph inputs and outputs for one question:
+
+```bash
+just type2-debug "Find the capacitive reactance when C = 75 μF and f = 60 Hz."
+```
+
+Use Ollama for the planner/code-generation calls:
+
+```bash
+just type2-debug-ollama "Find the capacitive reactance when C = 75 μF and f = 60 Hz."
+```
+
+The debug output includes the raw question, search query, top formula/law
+results, planner output, planner validation, code generation, execution,
+execution validation, and final composed output or fallback.
 
 ## Evaluation
 
@@ -264,6 +355,11 @@ Task 1 also supports:
 
 - `--include-fol`: include `premises-FOL` alongside `premises-NL`.
 
+Task 2 also supports:
+
+- `--random-sample`: randomly choose rows from the selected range.
+- `--seed N`: make `--random-sample` reproducible.
+
 ## Optional uv And just Commands
 
 The baseline does not require `uv` or `just`. If you prefer them, install from:
@@ -275,6 +371,7 @@ Optional `uv` commands:
 
 ```bash
 uv sync
+uv run python -m unittest discover -s tests
 uv run python scripts/task1_baseline.py --limit 1
 uv run python scripts/task2_baseline.py --limit 1
 ```
@@ -287,10 +384,12 @@ just check
 just task1-test
 just task2-test
 just task1-10
-just task2-10
+just task2-10  # random 10 Task 2 rows
 just task1
 just task2
 just unified unified_input.json outputs/unified_responses.json
+just type2-debug "Find the impedance when U = 100 V and I = 2 A."
+just type2-debug-ollama "Find the impedance when U = 100 V and I = 2 A."
 just eval-task1
 just eval-task2
 ```

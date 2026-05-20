@@ -7,26 +7,6 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class KnownValue:
-    symbol: str
-    value: float
-    unit: str
-    si_value: float
-    si_unit: str
-    raw: str
-
-
-@dataclass(frozen=True)
-class ParsedProblem:
-    question: str
-    topic: str
-    knowns: dict[str, KnownValue]
-    target: str
-    target_unit: str
-    possible_formulas: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
 class Formula:
     id: str
     topic: str
@@ -41,38 +21,28 @@ class Formula:
 
 
 @dataclass(frozen=True)
-class PlanStep:
-    formula_id: str
-    formula: str
-    substitution: str
-    target: str
-    expression: str
-    source: str = "formula_bank"
+class LawStatement:
+    id: str
+    topic: str
+    statement: str
+    keywords: tuple[str, ...]
+    aliases: tuple[str, ...] = ()
+    related_formula_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
-class EquationPlan:
-    formula_id: str
-    steps: list[PlanStep]
-    confidence: float
-    source: str = "formula_bank"
+class Type2SolverConfig:
+    model: str = "gemma4:e2b-it-q4_K_M"
+    ollama_url: str = "http://localhost:11434"
+    temperature: float = 0.0
+    timeout: float = 180.0
 
 
 @dataclass(frozen=True)
-class ExecutionResult:
-    success: bool
-    answer: float | None
-    unit: str
-    intermediates: dict[str, float]
-    trace: list[str]
-    error: str | None = None
-
-
-@dataclass(frozen=True)
-class VerificationResult:
-    passed: bool
-    confidence: float
+class ValidationResult:
+    ok: bool
     errors: list[str]
+    repair_prompt: str = ""
 
 
 @dataclass(frozen=True)
@@ -82,7 +52,6 @@ class PipelineResult:
     explanation: str
     cot: list[str]
     premises: list[str]
-    confidence: float
     raw_response: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -93,5 +62,4 @@ class PipelineResult:
             "explanation": self.explanation,
             "cot": self.cot,
             "premises": self.premises,
-            "confidence": self.confidence,
         }

@@ -28,7 +28,13 @@ class FastApiAppTests(unittest.TestCase):
         self.assertEqual(response.json()["status"], "ok")
 
     def test_solve_single_type2_sample(self) -> None:
-        with patch("task2_baseline.call_ollama", return_value="{}"):
+        with (
+            patch("exact2026.type2.pipeline.build_type2_llm", return_value=None),
+            patch(
+                "task2_baseline.call_ollama",
+                return_value='{"answer":"35.37","unit":"Ω","explanation":"Fallback physics solve."}',
+            ),
+        ):
             response = self.client.post(
                 "/solve",
                 json={"question": "Find capacitive reactance when C = 75 μF and f = 60 Hz."},
@@ -42,7 +48,11 @@ class FastApiAppTests(unittest.TestCase):
     def test_solve_mixed_batch(self) -> None:
         with (
             patch("task1_baseline.call_ollama", return_value='{"answer":"Yes","explanation":"By rule."}'),
-            patch("task2_baseline.call_ollama", return_value="{}"),
+            patch(
+                "task2_baseline.call_ollama",
+                return_value='{"answer":"50","unit":"Ω","explanation":"Fallback physics solve."}',
+            ),
+            patch("exact2026.type2.pipeline.build_type2_llm", return_value=None),
         ):
             response = self.client.post(
                 "/solve",

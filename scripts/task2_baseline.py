@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import random
 import re
 import sys
 import time
@@ -20,6 +21,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from exact2026.type2.pipeline import dumps_response, solve_physics_question
+from exact2026.type2.schemas import Type2SolverConfig
 
 DEFAULT_INPUT = (
     "EXACT2026_dataset_2026-05-15/"
@@ -37,7 +39,7 @@ Solve step by step, track units, and return exactly one JSON object with these k
 - "answer": the final numeric or symbolic answer only
 - "unit": the final unit only, or an empty string if dimensionless
 - "explanation": a concise derivation explaining the formula, substitutions, and unit conversion
-Use plain text math in JSON string values. Do not use LaTeX commands or backslashes.
+JSON string values may include plain text math or LaTeX-style notation when useful.
 
 Do not include markdown. Do not include extra keys.
 """
@@ -72,6 +74,17 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help="Zero-based row offset to start from.",
+    )
+    parser.add_argument(
+        "--random-sample",
+        action="store_true",
+        help="Randomly choose rows from the selected range instead of taking them in order.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional random seed for reproducible --random-sample runs.",
     )
     parser.add_argument(
         "--temperature",
@@ -281,14 +294,33 @@ def existing_keys(output_path: Path) -> set[int]:
     return {int(item["row_index"]) for item in data.get("predictions", [])}
 
 
+def select_rows(
+    rows: list[dict[str, str]],
+    start: int = 0,
+    limit: int | None = None,
+    random_sample: bool = False,
+    seed: int | None = None,
+) -> list[tuple[int, dict[str, str]]]:
+    eligible = list(enumerate(rows))[start:]
+    if not random_sample:
+        end = None if limit is None else limit
+        return eligible[:end]
+
+    rng = random.Random(seed)
+    if limit is None or limit >= len(eligible):
+        selected = eligible[:]
+        rng.shuffle(selected)
+        return selected
+    return rng.sample(eligible, limit)
+
+
 def main() -> int:
     args = parse_args()
     input_path = Path(args.input)
     output_path = Path(args.output)
 
     rows = load_rows(input_path)
-    end = None if args.limit is None else args.start + args.limit
-    selected = list(enumerate(rows))[args.start : end]
+    selected = select_rows(rows, args.start, args.limit, args.random_sample, args.seed)
     seen = existing_keys(output_path) if args.resume else set()
 
     predictions: list[dict[str, Any]] = []
@@ -308,12 +340,11 @@ def main() -> int:
         )
         result = solve_physics_question(
             row.get("question", ""),
-            model_complete=lambda system_prompt, user_prompt: call_ollama(
-                args.ollama_url,
-                args.model,
-                "\n\n".join([system_prompt, user_prompt]),
-                args.temperature,
-                args.timeout,
+            config=Type2SolverConfig(
+                model=args.model,
+                ollama_url=args.ollama_url,
+                temperature=args.temperature,
+                timeout=args.timeout,
             ),
             fallback_model=lambda prompt: call_ollama(
                 args.ollama_url,
@@ -340,7 +371,6 @@ def main() -> int:
                 "explanation": parsed["explanation"],
                 "cot": parsed.get("cot", []),
                 "premises": parsed.get("premises", []),
-                "confidence": parsed.get("confidence", 0),
                 "raw_response": raw_response,
                 "correct_ans": correct_ans,
                 "correct_cot": correct_cot,

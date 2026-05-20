@@ -21,7 +21,11 @@ The default local model is `gemma4:e2b-it-q4_K_M`, called through Ollama at
 - `scripts/task2_baseline.py`: Task 2 baseline runner.
 - `scripts/evaluate.py`: Modular evaluation CLI, currently with P1 exact match.
 - `scripts/unified_api.py`: Official unified Type 1/Type 2 API router.
+- `scripts/debug_type2_flow.py`: Step-by-step Type 2 planner/search/debug trace.
 - `scripts/run_baseline.sh`: Convenience wrapper that does not require `just`.
+- `src/exact2026/type2/knowledge_search.py`: Plain text formula/law search.
+- `src/exact2026/type2/agents/planner_agent.py`: Type 2 planning agent.
+- `src/exact2026/type2/validation/planner_validator.py`: Deterministic plan validator.
 - `README.md`: User-facing setup, run, and evaluation instructions.
 - `justfile`: Optional shortcuts for users with `just`.
 - `pyproject.toml`, `requirements.txt`, `uv.lock`: Python dependency metadata.
@@ -87,6 +91,19 @@ Unified official API-format run:
 Optional `uv`/`just` commands exist in `README.md`, but do not require those
 tools for normal changes unless the user asks.
 
+Preferred check when `uv` is available:
+
+```bash
+just check
+```
+
+Type 2 debug:
+
+```bash
+just type2-debug "Find the capacitive reactance when C = 75 μF and f = 60 Hz."
+just type2-debug-ollama "Find the capacitive reactance when C = 75 μF and f = 60 Hz."
+```
+
 ## Baseline Behavior
 
 Task 1:
@@ -103,6 +120,25 @@ Task 2:
 - Reads the Task 2 CSV file.
 - Prompts with the `question` field only. Do not leak source `cot`,
   `answer`, or `unit` into generation prompts.
+- Uses the structured Type 2 pipeline in `src/exact2026/type2/`.
+- The planner LLM is responsible for extracting givens, target, units, SI
+  conversions, and calculation steps from the raw question.
+- Preserve stated units in planner `value`/`unit` fields, such as `mC`, `mm`,
+  `cm`, or `μF`. Use `si_value`/`si_unit` for executor consistency, but do not
+  force every quantity into base SI units unless a formula needs consistent
+  units.
+- Before planning, the pipeline runs plain text search over the local
+  formula/law bank and includes top matches in the planner prompt.
+- There is no deterministic regex/parser fallback that extracts known
+  variables or infers a plan. If the planner does not return a valid plan, the
+  graph routes to structured fallback, and the baseline may then use the normal
+  LLM fallback response path.
+- The code generator receives only the validated plan and should not
+  reinterpret the raw question.
+- Every Type 2 plan step should fill `premise` with the formula or physics law
+  used by that step. Prefer formula-bank/search-context items, but the planner
+  may write a standard physics formula or law from model knowledge when the
+  bank does not contain the needed item.
 - Writes `answer`, `unit`, `explanation`, `raw_response`, plus source fields
   `correct_ans`, `correct_cot`, and `correct_unit`.
 
@@ -116,13 +152,16 @@ Type 1 and Type 2 solving separate.
 - Type 1 is detected when `premises-NL` exists and is non-empty.
 - Missing or empty `premises-NL` is routed to Type 2.
 - Type 1 routes to the existing Task 1 prompt/parser from `task1_baseline.py`.
-- Type 2 routes to the existing Task 2 prompt/parser from `task2_baseline.py`.
+- Type 2 routes to `solve_physics_question`, which runs the structured
+  planner/search/code/validation pipeline before falling back to a direct
+  model response when available.
 - The loader accepts a plain list, a single sample object, or an object with
   `queries`, `samples`, `inputs`, or `data`.
 - Each response must include JSON-serializable `answer` and `explanation`.
 - Optional response fields are kept only when valid:
-  `fol` string, `cot` list of strings, `premises` list of strings, and
-  `confidence` number between 0 and 1.
+  `fol` string, `cot` list of strings, `premises` list of strings, and, for
+  non-Type-2 responses that provide it, `confidence` number between 0 and 1.
+- Type 2 responses should not include a confidence score.
 
 ## Output Parsing Gotcha
 
@@ -135,6 +174,24 @@ explanations can include unescaped LaTeX-style backslashes such as `\mu`,
 
 Keep this fallback behavior unless replacing it with a more robust parser.
 Prompts also ask the model to avoid LaTeX commands and backslashes.
+
+For Type 2 shared JSON extraction helpers live in
+`src/exact2026/type2/json_utils.py`.
+
+## Type 2 Search And Validation
+
+- `search_physics_knowledge(query, top_k=8)` uses simple token overlap against
+  formula/law IDs, topics, equations, expressions, descriptions, keywords,
+  aliases, and related formula IDs.
+- Do not add embeddings or retrieval dependencies unless explicitly requested.
+- The planner validator checks structure and internal consistency only. It
+  must not infer missing physics facts or silently add constants.
+- `READY` plans require non-empty givens, non-empty steps, empty
+  `missing_information`, declared SI values/units for every given, unique step
+  outputs, defined step inputs, valid formulas, and final output/unit matching
+  the target.
+- A formula may reference constants such as `k` only if the planner includes
+  them in `givens` or prior step outputs.
 
 ## Evaluation Design
 
@@ -174,7 +231,8 @@ task-specific behavior separated from aggregate reporting.
 - Use `requests` for HTTP calls.
 - Preserve existing JSON output shapes unless the user asks to change them.
 - Keep generated artifacts out of Git.
-- Run `./scripts/run_baseline.sh check` before finalizing code changes.
+- Run `just check` before finalizing code changes when `uv`/`just` are
+  available; otherwise run `./scripts/run_baseline.sh check`.
 - Add or update tests under `tests/` for unified API behavior.
 
 ## Git Notes

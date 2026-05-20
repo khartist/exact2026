@@ -1,8 +1,8 @@
-"""Small trusted formula bank for Type 2 MVP solving."""
+"""Trusted physics knowledge bank for Type 2 solving."""
 
 from __future__ import annotations
 
-from .schemas import Formula
+from .schemas import Formula, LawStatement
 
 
 FORMULAS: tuple[Formula, ...] = (
@@ -46,6 +46,36 @@ FORMULAS: tuple[Formula, ...] = (
             ("F23", "k*Abs(q2*q3)/BC**2"),
         ),
     ),
+    Formula(
+        "net_coulomb_force_equilateral",
+        "coulomb_force",
+        "F = sqrt(3)*k*Abs(q1*q3)/r**2",
+        "sqrt(3)*k*Abs(q1*q3)/r**2",
+        ("k", "q1", "q3", "r"),
+        ("F",),
+        "N",
+        ("force", "coulomb", "equilateral", "triangle", "vector", "net"),
+        "Net force on a vertex charge in an equilateral triangle with equal source distances: F = sqrt(3) k |q1 q3| / r^2",
+    ),
+    Formula(
+        "net_coulomb_force_perpendicular_bisector",
+        "coulomb_force",
+        "F = sqrt(Fx**2 + Fy**2)",
+        "sqrt(Fx**2 + Fy**2)",
+        ("k", "q1", "q2", "q", "AB", "h"),
+        ("F",),
+        "N",
+        ("force", "coulomb", "perpendicular", "bisector", "net", "magnitude"),
+        "Net Coulomb force at a point on the perpendicular bisector: combine x and y components.",
+        (
+            ("a", "AB/2"),
+            ("r", "sqrt(a**2 + h**2)"),
+            ("F1", "k*Abs(q1*q)/r**2"),
+            ("F2", "k*Abs(q2*q)/r**2"),
+            ("Fx", "(F1 + F2)*a/r"),
+            ("Fy", "(F1 - F2)*h/r"),
+        ),
+    ),
     Formula("electric_field_force", "electric_field", "E = F/q", "F/q", ("F", "q"), ("E",), "N/C", ("electric", "field"), "Electric field: E = F/q"),
     Formula("electric_field_charge", "electric_field", "E = k*q/r**2", "k*q/r**2", ("k", "q", "r"), ("E",), "N/C", ("electric", "field", "charge"), "Electric field: E = k*q/r^2"),
     Formula("electric_potential", "electric_potential", "V = k*q/r", "k*q/r", ("k", "q", "r"), ("V", "U"), "V", ("electric", "potential", "voltage"), "Electric potential: V = k*q/r"),
@@ -54,5 +84,87 @@ FORMULAS: tuple[Formula, ...] = (
 )
 
 
+LAW_STATEMENTS: tuple[LawStatement, ...] = (
+    LawStatement(
+        id="passive_sign_convention",
+        topic="circuits",
+        statement="Passive sign convention: current enters the positive terminal of an element.",
+        keywords=("passive", "sign", "current", "terminal", "positive", "voltage"),
+        aliases=("PSC",),
+        related_formula_ids=("ohm_voltage", "power_vi"),
+    ),
+    LawStatement(
+        id="voltage_drop_current_direction",
+        topic="circuits",
+        statement="Voltage drop is in the direction of conventional current flow through a passive element.",
+        keywords=("voltage", "drop", "current", "direction", "resistor"),
+        related_formula_ids=("ohm_voltage",),
+    ),
+    LawStatement(
+        id="series_current_same",
+        topic="series_resistance",
+        statement="In a series circuit, the same current flows through every element.",
+        keywords=("series", "same", "current", "resistor", "circuit"),
+        related_formula_ids=("series_resistance", "ohm_current", "ohm_voltage"),
+    ),
+    LawStatement(
+        id="series_voltage_adds",
+        topic="series_resistance",
+        statement="In a series circuit, source voltage equals the sum of element voltage drops.",
+        keywords=("series", "voltage", "sum", "drop", "kirchhoff"),
+        related_formula_ids=("series_resistance", "ohm_voltage"),
+    ),
+    LawStatement(
+        id="parallel_voltage_same",
+        topic="parallel_resistance",
+        statement="In a parallel circuit, each branch has the same voltage across it.",
+        keywords=("parallel", "same", "voltage", "branch", "circuit"),
+        related_formula_ids=("parallel_two_resistance", "ohm_current"),
+    ),
+    LawStatement(
+        id="parallel_currents_add",
+        topic="parallel_resistance",
+        statement="In a parallel circuit, total current equals the sum of branch currents.",
+        keywords=("parallel", "current", "sum", "branch", "kirchhoff"),
+        related_formula_ids=("parallel_two_resistance", "ohm_current"),
+    ),
+    LawStatement(
+        id="kirchhoff_current_law",
+        topic="circuits",
+        statement="Kirchhoff current law: total current entering a node equals total current leaving it.",
+        keywords=("kirchhoff", "kcl", "node", "current", "entering", "leaving"),
+        aliases=("KCL",),
+    ),
+    LawStatement(
+        id="kirchhoff_voltage_law",
+        topic="circuits",
+        statement="Kirchhoff voltage law: signed voltage changes around a closed loop sum to zero.",
+        keywords=("kirchhoff", "kvl", "loop", "voltage", "sum"),
+        aliases=("KVL",),
+    ),
+    LawStatement(
+        id="coulomb_superposition",
+        topic="coulomb_force",
+        statement="For multiple charges, electric forces add by vector superposition.",
+        keywords=("coulomb", "force", "superposition", "vector", "charges"),
+        related_formula_ids=("coulomb_force", "net_coulomb_force_right_triangle"),
+    ),
+    LawStatement(
+        id="electric_field_superposition",
+        topic="electric_field",
+        statement="Electric fields from multiple source charges add by vector superposition.",
+        keywords=("electric", "field", "superposition", "vector", "charges"),
+        related_formula_ids=("electric_field_charge",),
+    ),
+)
+
+
+KnowledgeItem = Formula | LawStatement
+
+
 def get_formula(formula_id: str) -> Formula | None:
     return next((formula for formula in FORMULAS if formula.id == formula_id), None)
+
+
+def get_law(law_id: str) -> LawStatement | None:
+    return next((law for law in LAW_STATEMENTS if law.id == law_id), None)

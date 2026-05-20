@@ -77,13 +77,12 @@ class UnifiedApiTests(unittest.TestCase):
 
         response = solve_unified_query(query, self.fake_model(calls))
 
-        self.assertTrue(calls)
-        self.assertTrue(all(call[1] == "type2" for call in calls))
-        self.assertNotIn("Premises in natural language:", calls[0][0])
+        self.assertEqual(calls[0][1], "type2")
         self.assertEqual(response["answer"], "35.37")
         self.assertEqual(response["unit"], "Ω")
         self.assertIn("cot", response)
         self.assertIn("premises", response)
+        self.assertNotIn("confidence", response)
 
     def test_output_contains_answer_and_explanation(self) -> None:
         query = normalize_query(
@@ -141,45 +140,6 @@ class UnifiedApiTests(unittest.TestCase):
                         "explanation": "B follows by modus ponens.",
                         "cot": ["Step 1: Use the implication.", "Step 2: Apply A."],
                         "confidence": 0.9,
-                    }
-                )
-            if "planner agent" in prompt:
-                return json.dumps(
-                    {
-                        "action": "formula_bank",
-                        "formula_id": "capacitive_reactance",
-                        "steps": [
-                            "Extract and normalize given quantities into SI units.",
-                            "Select the capacitive reactance formula.",
-                            "Compute the final answer.",
-                        ],
-                        "reason": "The formula bank covers capacitive reactance directly.",
-                    }
-                )
-            if "code generator agent" in prompt:
-                return json.dumps(
-                    {
-                        "code": "\n".join(
-                            [
-                                "steps = []",
-                                "premises = []",
-                                "X_C = 1/(2*3.141592653589793*f*C)",
-                                "steps.append('Compute X_C = 1/(2πfC).')",
-                                "answer = X_C",
-                                "unit = 'Ω'",
-                                "steps.append('Compute the final reactance.')",
-                                "premises.append('X_C = 1/(2πfC)')",
-                            ]
-                        )
-                    }
-                )
-            if "reviewer agent" in prompt:
-                return json.dumps(
-                    {
-                        "passed": True,
-                        "confidence": 0.81,
-                        "errors": [],
-                        "feedback": "Execution and backward consistency are acceptable.",
                     }
                 )
             return json.dumps(

@@ -19,6 +19,7 @@ if str(SRC_DIR) not in sys.path:
 import task1_baseline
 import task2_baseline
 from exact2026.type2.pipeline import solve_physics_question
+from exact2026.type2.schemas import Type2SolverConfig
 
 
 QueryType = Literal["type1", "type2"]
@@ -156,12 +157,16 @@ def normalize_string(value: Any) -> str:
     return str(value).strip()
 
 
-def solve_unified_query(query: UnifiedQuery, model_fn: ModelFn) -> dict[str, Any]:
+def solve_unified_query(
+    query: UnifiedQuery,
+    model_fn: ModelFn,
+    type2_config: Type2SolverConfig | None = None,
+) -> dict[str, Any]:
     """Route to the task-specific solver while sharing the official input API."""
 
     if query.query_type == "type1":
         return solve_type1_query(query, model_fn)
-    return solve_type2_query(query, model_fn)
+    return solve_type2_query(query, model_fn, type2_config)
 
 
 def solve_type1_query(query: UnifiedQuery, model_fn: ModelFn) -> dict[str, Any]:
@@ -180,14 +185,14 @@ def solve_type1_query(query: UnifiedQuery, model_fn: ModelFn) -> dict[str, Any]:
     return response
 
 
-def solve_type2_query(query: UnifiedQuery, model_fn: ModelFn) -> dict[str, Any]:
-    def model_complete(system_prompt: str, user_prompt: str) -> str:
-        prompt = "\n\n".join([system_prompt, user_prompt])
-        return model_fn(prompt, "type2")
-
+def solve_type2_query(
+    query: UnifiedQuery,
+    model_fn: ModelFn,
+    type2_config: Type2SolverConfig | None = None,
+) -> dict[str, Any]:
     result = solve_physics_question(
         query.question,
-        model_complete=model_complete,
+        config=type2_config,
         fallback_model=lambda prompt: model_fn(prompt, "type2"),
     )
     return normalize_api_response(result.to_api_dict())
@@ -316,7 +321,16 @@ def main() -> int:
     responses: list[dict[str, Any]] = []
     for sample_index, sample in selected:
         query = normalize_query(sample)
-        response = solve_unified_query(query, ollama_model_fn)
+        response = solve_unified_query(
+            query,
+            ollama_model_fn,
+            Type2SolverConfig(
+                model=args.model,
+                ollama_url=args.ollama_url,
+                temperature=args.temperature,
+                timeout=args.timeout,
+            ),
+        )
         validation_errors = validate_api_response(response)
         if validation_errors:
             response["validation_errors"] = validation_errors

@@ -18,6 +18,7 @@ for path in (REPO_ROOT, SCRIPTS_DIR):
 import task1_baseline  # noqa: E402
 import task2_baseline  # noqa: E402
 import unified_api  # noqa: E402
+from exact2026.type2.schemas import Type2SolverConfig  # noqa: E402
 
 
 DEFAULT_MODEL = os.getenv("EXACT_MODEL", unified_api.DEFAULT_MODEL)
@@ -43,7 +44,7 @@ def solve(payload: Any = Body(...)) -> dict[str, Any]:
     responses: list[dict[str, Any]] = []
     for sample_index, sample in enumerate(samples):
         query = unified_api.normalize_query(sample)
-        response = unified_api.solve_unified_query(query, api_model_fn)
+        response = unified_api.solve_unified_query(query, api_model_fn, type2_config())
         validation_errors = unified_api.validate_api_response(response)
         if validation_errors:
             response["validation_errors"] = validation_errors
@@ -81,4 +82,13 @@ def api_model_fn(prompt: str, query_type: unified_api.QueryType) -> str:
         prompt,
         DEFAULT_TEMPERATURE,
         DEFAULT_TIMEOUT,
+    )
+
+
+def type2_config() -> Type2SolverConfig:
+    return Type2SolverConfig(
+        model=DEFAULT_MODEL,
+        ollama_url=DEFAULT_OLLAMA_URL,
+        temperature=DEFAULT_TEMPERATURE,
+        timeout=DEFAULT_TIMEOUT,
     )
