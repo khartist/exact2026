@@ -20,6 +20,7 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from exact2026.type2.json_utils import extract_json_like_fields, extract_json_object
 from exact2026.type2.pipeline import dumps_response, solve_physics_question
 from exact2026.type2.schemas import Type2SolverConfig
 
@@ -39,7 +40,9 @@ Solve step by step, track units, and return exactly one JSON object with these k
 - "answer": the final numeric or symbolic answer only
 - "unit": the final unit only, or an empty string if dimensionless
 - "explanation": a concise derivation explaining the formula, substitutions, and unit conversion
-JSON string values may include plain text math or LaTeX-style notation when useful.
+Use LaTeX only when it improves readability, and escape backslashes so the response stays valid JSON.
+Prefer plain text math when possible.
+The response must be valid JSON.
 
 Do not include markdown. Do not include extra keys.
 """
@@ -185,81 +188,6 @@ def call_ollama(
         raise RuntimeError(f"Unexpected Ollama response: {body}") from exc
 
 
-def extract_json_object(text: str) -> dict[str, Any] | None:
-    stripped = text.strip()
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", stripped, re.DOTALL)
-    candidates = [stripped]
-    if fenced:
-        candidates.insert(0, fenced.group(1))
-
-    first = stripped.find("{")
-    last = stripped.rfind("}")
-    if first != -1 and last != -1 and first < last:
-        candidates.append(stripped[first : last + 1])
-
-    for candidate in candidates:
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
-
-    for candidate in candidates:
-        parsed = extract_json_like_fields(candidate, ("answer", "unit", "explanation"))
-        if parsed:
-            return parsed
-    return None
-
-
-def extract_json_like_fields(text: str, keys: tuple[str, ...]) -> dict[str, str]:
-    parsed: dict[str, str] = {}
-    for key in keys:
-        value = extract_json_like_string_field(text, key)
-        if value is not None:
-            parsed[key] = value
-    return parsed
-
-
-def extract_json_like_string_field(text: str, key: str) -> str | None:
-    quoted = re.search(
-        rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"',
-        text,
-        re.DOTALL,
-    )
-    if quoted:
-        return decode_json_like_string(quoted.group(1))
-
-    unquoted = re.search(
-        rf'"{re.escape(key)}"\s*:\s*([^,\n}}]+)',
-        text,
-        re.DOTALL,
-    )
-    if unquoted:
-        return unquoted.group(1).strip().strip('"')
-    return None
-
-
-def decode_json_like_string(text: str) -> str:
-    chars: list[str] = []
-    i = 0
-    while i < len(text):
-        char = text[i]
-        if char != "\\" or i + 1 >= len(text):
-            chars.append(char)
-            i += 1
-            continue
-
-        next_char = text[i + 1]
-        if next_char in {'"', "\\", "/"}:
-            chars.append(next_char)
-        else:
-            chars.append(char)
-            chars.append(next_char)
-        i += 2
-    return "".join(chars)
-
-
 def clean_scalar(value: Any) -> str:
     if value is None:
         return ""
@@ -270,6 +198,8 @@ def clean_scalar(value: Any) -> str:
 
 def parse_model_response(raw_text: str) -> dict[str, str]:
     parsed = extract_json_object(raw_text)
+    if parsed is None:
+        parsed = extract_json_like_fields(raw_text, ("answer", "unit", "explanation"))
     if parsed is None:
         return {
             "answer": "",

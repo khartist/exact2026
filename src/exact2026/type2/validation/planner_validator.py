@@ -29,6 +29,8 @@ def validate_calculation_plan(plan: dict[str, Any]) -> ValidationResult:
     final_step = plan.get("final_step")
     missing = plan.get("missing_information", [])
     status = str(plan.get("status", "")).strip()
+    direct_answer = clean_text(plan.get("answer"))
+    direct_explanation = clean_text(plan.get("explanation"))
 
     if not isinstance(target, dict):
         errors.append("target must be an object.")
@@ -37,8 +39,13 @@ def validate_calculation_plan(plan: dict[str, Any]) -> ValidationResult:
     target_unit = clean_text(target.get("unit"))
     if not target_symbol:
         errors.append("target.symbol is required.")
-    if not target_unit:
+    if status == "READY" and not target_unit:
         errors.append("target.unit is required.")
+    if status == "DIRECT_ANSWER":
+        if not direct_answer:
+            errors.append("answer is required when status is DIRECT_ANSWER.")
+        if not direct_explanation:
+            errors.append("explanation is required when status is DIRECT_ANSWER.")
 
     if not isinstance(givens, dict) or not givens:
         if status == "READY":
@@ -64,13 +71,19 @@ def validate_calculation_plan(plan: dict[str, Any]) -> ValidationResult:
     if not isinstance(steps, list) or not steps:
         if status == "READY":
             errors.append("steps must be a non-empty list when status is READY.")
+        if status == "DIRECT_ANSWER" and steps:
+            errors.append("steps must be empty when status is DIRECT_ANSWER.")
         steps = []
 
     if status == "READY" and not final_step:
         errors.append("final_step is required.")
+    if status == "DIRECT_ANSWER" and clean_text(final_step):
+        errors.append("final_step must be empty when status is DIRECT_ANSWER.")
 
     if status == "READY" and missing:
         errors.append("missing_information must be empty when status is READY.")
+    if status == "DIRECT_ANSWER" and missing:
+        errors.append("missing_information must be empty when status is DIRECT_ANSWER.")
 
     available = set(given_symbols)
     outputs: set[str] = set()
@@ -129,6 +142,14 @@ def validate_calculation_plan(plan: dict[str, Any]) -> ValidationResult:
             errors.append("final step output must equal target symbol.")
         if clean_text(final_step_obj.get("unit")) != target_unit:
             errors.append("final step unit must equal target unit.")
+
+    if status == "DIRECT_ANSWER":
+        if steps:
+            errors.append("steps must be empty when status is DIRECT_ANSWER.")
+        if not direct_answer:
+            errors.append("answer is required when status is DIRECT_ANSWER.")
+        if not direct_explanation:
+            errors.append("explanation is required when status is DIRECT_ANSWER.")
 
     return ValidationResult(not errors, errors, build_repair_prompt(errors))
 

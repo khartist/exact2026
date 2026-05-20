@@ -8,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .agents.code_generator_agent import code_generator_agent
 from .agents.planner_agent import planner_agent
-from .composer import compose_answer
+from .composer import compose_answer, compose_direct_answer
 from .execution.code_executor import execute_structured_code
 from .schemas import PipelineResult
 from .state import Type2State
@@ -42,6 +42,7 @@ def build_type2_graph(llm: Any = None):
     workflow.add_node("code_executor", code_executor_node)
     workflow.add_node("execution_validator", execution_validator_node)
     workflow.add_node("answer_composer", answer_composer_node)
+    workflow.add_node("direct_answer_composer", direct_answer_composer_node)
     workflow.add_node("fallback", fallback_node)
 
     workflow.add_edge(START, "planner_agent")
@@ -51,6 +52,7 @@ def build_type2_graph(llm: Any = None):
         route_from_planner_validator,
         {
             "code_generator_agent": "code_generator_agent",
+            "direct_answer_composer": "direct_answer_composer",
             "planner_agent": "planner_agent",
             "fallback": "fallback",
         },
@@ -67,6 +69,7 @@ def build_type2_graph(llm: Any = None):
         },
     )
     workflow.add_edge("answer_composer", END)
+    workflow.add_edge("direct_answer_composer", END)
     workflow.add_edge("fallback", END)
     return workflow.compile()
 
@@ -117,6 +120,20 @@ def answer_composer_node(state: Type2State) -> dict[str, Any]:
     return {"result": result}
 
 
+def direct_answer_composer_node(state: Type2State) -> dict[str, Any]:
+    result = compose_direct_answer(
+        state["question"],
+        state["plan"],
+        metadata={
+            "planner_attempts": state.get("planner_attempts", 0),
+            "planner_validation_errors": state.get("planner_validation").errors
+            if state.get("planner_validation")
+            else [],
+        },
+    )
+    return {"result": result}
+
+
 def fallback_node(state: Type2State) -> dict[str, Any]:
     return {
         "result": fallback_result(
@@ -128,9 +145,11 @@ def fallback_node(state: Type2State) -> dict[str, Any]:
 
 def route_from_planner_validator(
     state: Type2State,
-) -> Literal["code_generator_agent", "planner_agent", "fallback"]:
+) -> Literal["code_generator_agent", "direct_answer_composer", "planner_agent", "fallback"]:
     validation = state["planner_validation"]
     if validation.ok:
+        if str(state.get("plan", {}).get("status", "")).strip() == "DIRECT_ANSWER":
+            return "direct_answer_composer"
         return "code_generator_agent"
     if state.get("planner_attempts", 0) < MAX_PLANNER_ATTEMPTS:
         return "planner_agent"

@@ -11,7 +11,8 @@ for path in (SCRIPTS_DIR, SRC_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from task2_baseline import select_rows  # noqa: E402
+from exact2026.type2.json_utils import extract_json_object  # noqa: E402
+from task2_baseline import parse_model_response, select_rows  # noqa: E402
 
 
 class Task2BaselineSelectionTests(unittest.TestCase):
@@ -31,6 +32,31 @@ class Task2BaselineSelectionTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(len(first), 10)
         self.assertNotEqual([index for index, _ in first], list(range(10)))
+
+    def test_parse_model_response_handles_plain_key_value_text(self) -> None:
+        raw = (
+            "answer:125\n"
+            "unit:μJ\n"
+            "explanation:Solved using the capacitor discharge energy formula."
+        )
+
+        parsed = parse_model_response(raw)
+
+        self.assertEqual(parsed["answer"], "125")
+        self.assertEqual(parsed["unit"], "μJ")
+        self.assertIn("capacitor discharge energy", parsed["explanation"])
+
+    def test_extract_json_object_repairs_bare_latex_backslashes(self) -> None:
+        raw = (
+            '{"answer":"125","unit":"μJ",'
+            '"explanation":"Use $F_{net}=\\sqrt{3}F$ and $\\mu$ carefully."}'
+        )
+
+        parsed = extract_json_object(raw)
+
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["unit"], "μJ")
+        self.assertIn("\\sqrt{3}", parsed["explanation"])
 
 
 if __name__ == "__main__":

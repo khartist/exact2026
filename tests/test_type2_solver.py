@@ -258,6 +258,41 @@ class Type2SolverTests(unittest.TestCase):
         self.assertEqual(result.unit, "W")
         self.assertEqual(result.premises, ["AC current: I = V/Z", "Power: P = I^2 R"])
 
+    def test_direct_answer_plan_skips_code_generation(self) -> None:
+        calls: list[str] = []
+
+        def handler(prompt: str) -> str:
+            calls.append(prompt)
+            if "planner agent" in prompt:
+                return json.dumps(
+                    {
+                        "target": {"symbol": "answer", "description": "direct answer", "unit": ""},
+                        "answer": "parallel",
+                        "unit": "",
+                        "explanation": "The capacitors are connected in parallel.",
+                        "premises": ["Parallel connection"],
+                        "steps": [],
+                        "final_step": "",
+                        "missing_information": [],
+                        "status": "DIRECT_ANSWER",
+                    }
+                )
+            if "code generator agent" in prompt:
+                raise AssertionError("Code generation should be skipped for direct-answer plans.")
+            return "{}"
+
+        result = solve_physics_question(
+            "In one word, how are the two identical capacitors connected after the switch closes?",
+            llm=FakeLLM(handler),
+        )
+
+        self.assertEqual(result.answer, "parallel")
+        self.assertEqual(result.unit, "")
+        self.assertEqual(result.metadata["solver_mode"], "direct_answer")
+        self.assertFalse(result.metadata["verified"])
+        self.assertTrue(any("planner agent" in call for call in calls))
+        self.assertFalse(any("code generator agent" in call for call in calls))
+
     def test_ld003_net_coulomb_force(self) -> None:
         result, _ = self.solve_with_plan(
             (

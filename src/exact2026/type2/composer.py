@@ -43,6 +43,31 @@ def compose_answer(
     )
 
 
+def compose_direct_answer(
+    question: str,
+    plan: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+) -> PipelineResult:
+    answer = str(plan.get("answer", "")).strip()
+    unit = str(plan.get("unit", "")).strip()
+    explanation = str(plan.get("explanation", "")).strip() or f"The answer is {answer} {unit}".strip()
+    premises = unique_preserved(plan.get("premises", []))
+    return PipelineResult(
+        answer=answer,
+        unit=unit,
+        explanation=explanation,
+        cot=[explanation] if explanation else [f"Direct answer: {answer} {unit}".strip()],
+        premises=premises,
+        metadata={
+            "agent_loop": "structured_langgraph",
+            "verified": False,
+            "question": question,
+            "solver_mode": "direct_answer",
+            **(metadata or {}),
+        },
+    )
+
+
 def build_full_cot(plan: dict[str, Any], trace: list[dict[str, Any]]) -> list[str]:
     cot: list[str] = []
     givens_text = format_givens(plan.get("givens", {}))

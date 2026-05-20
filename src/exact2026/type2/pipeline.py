@@ -20,7 +20,7 @@ FallbackModelFn = Callable[[str], str]
 FALLBACK_SYSTEM_PROMPT = """You solve physics problems.
 Use only the stated problem information and standard physics formulas.
 Return strict JSON only with keys: answer, unit, formula, explanation, cot, premises.
-The answer must be numeric without the unit. Do not use markdown."""
+The answer must be numeric without the unit. Use LaTeX only when it improves readability, and escape backslashes so the response remains valid JSON. Do not use markdown."""
 
 
 def solve_physics_question(
