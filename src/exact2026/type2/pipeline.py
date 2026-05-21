@@ -11,7 +11,7 @@ from typing import Any
 
 from .json_utils import extract_json_like_fields, extract_json_object
 from .llm import build_type2_llm
-from .schemas import PipelineResult, Type2SolverConfig, ValidationResult
+from .schemas import KnowledgeSearchConfig, PipelineResult, Type2SolverConfig, ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +33,28 @@ def solve_physics_question(
 
     logger.info("type2.raw_question=%s", question)
     active_llm = llm if llm is not None else build_type2_llm(config) if config else None
-    result = solve_with_structured_graph(question, llm=active_llm)
+    result = solve_with_structured_graph(
+        question,
+        llm=active_llm,
+        knowledge_config=knowledge_config_from_solver_config(config),
+    )
     if not result.answer and fallback_model is not None:
         result = solve_with_llm_fallback(question, fallback_model)
     logger.info("type2.final_response=%s", result)
     return result
+
+
+def knowledge_config_from_solver_config(
+    config: Type2SolverConfig | None,
+) -> KnowledgeSearchConfig | None:
+    if config is None:
+        return None
+    return KnowledgeSearchConfig(
+        enabled_types=config.knowledge_context_types,
+        top_k=config.knowledge_top_k,
+        max_examples=config.knowledge_max_examples,
+        max_diagrams=config.knowledge_max_diagrams,
+    )
 
 
 def solve_with_llm_fallback(

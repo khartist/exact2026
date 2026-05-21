@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..knowledge_search import search_physics_knowledge
+from ..knowledge_search import build_planner_knowledge_context
 from ..prompts import load_prompt
 from ..state import Type2State
 from .common import invoke_json_agent
@@ -13,7 +13,7 @@ from .common import invoke_json_agent
 def planner_agent(state: Type2State, llm: Any) -> dict[str, Any]:
     question = state["question"]
     search_query = question
-    knowledge = search_physics_knowledge(search_query, top_k=8)
+    knowledge = build_planner_knowledge_context(search_query, state.get("knowledge_config"))
     attempts = state.get("planner_attempts", 0) + 1
     payload = {
         "question": question,

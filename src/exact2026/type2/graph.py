@@ -10,7 +10,7 @@ from .agents.code_generator_agent import code_generator_agent
 from .agents.planner_agent import planner_agent
 from .composer import compose_answer, compose_direct_answer
 from .execution.code_executor import execute_structured_code
-from .schemas import PipelineResult
+from .schemas import KnowledgeSearchConfig, PipelineResult
 from .state import Type2State
 from .validation.execution_validator import validate_structured_execution
 from .validation.planner_validator import validate_calculation_plan
@@ -19,13 +19,18 @@ MAX_PLANNER_ATTEMPTS = 2
 MAX_CODE_ATTEMPTS = 2
 
 
-def solve_with_structured_graph(question: str, llm: Any = None) -> PipelineResult:
+def solve_with_structured_graph(
+    question: str,
+    llm: Any = None,
+    knowledge_config: KnowledgeSearchConfig | None = None,
+) -> PipelineResult:
     graph = build_type2_graph(llm)
     final_state = graph.invoke(
         {
             "question": question,
             "planner_attempts": 0,
             "code_attempts": 0,
+            "knowledge_config": knowledge_config,
         }
     )
     result = final_state.get("result")

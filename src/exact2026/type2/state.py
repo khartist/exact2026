@@ -9,7 +9,8 @@ from .schemas import PipelineResult, ValidationResult
 
 class Type2State(TypedDict, total=False):
     question: str
-    knowledge: list[dict[str, Any]]
+    knowledge: dict[str, list[dict[str, Any]]] | list[dict[str, Any]]
+    knowledge_config: Any
     search_query: str
     plan: dict[str, Any]
     planner_attempts: int

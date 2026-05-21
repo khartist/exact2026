@@ -11,8 +11,10 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from exact2026.type2.formula_bank import CATEGORIES, DIAGRAMS, FORMULAS, LAW_STATEMENTS, WORKED_EXAMPLES  # noqa: E402
+from exact2026.type2.knowledge_search import build_planner_knowledge_context, search_physics_knowledge  # noqa: E402
 from exact2026.type2.pipeline import solve_physics_question  # noqa: E402
-from exact2026.type2.knowledge_search import search_physics_knowledge  # noqa: E402
+from exact2026.type2.schemas import KnowledgeSearchConfig, Type2SolverConfig  # noqa: E402
 from exact2026.type2.validation.execution_validator import validate_structured_execution  # noqa: E402
 from exact2026.type2.validation.planner_validator import validate_calculation_plan  # noqa: E402
 
@@ -176,6 +178,17 @@ class Type2SolverTests(unittest.TestCase):
 
         self.assertEqual(results[0]["id"], "capacitor_energy")
 
+    def test_text_search_finds_capacitor_combination_and_time_constant(self) -> None:
+        capacitor_results = search_physics_knowledge("two capacitors in parallel and series with charge")
+        rc_results = search_physics_knowledge("RC time constant for resistor and capacitor")
+
+        capacitor_ids = {item["id"] for item in capacitor_results}
+        rc_ids = {item["id"] for item in rc_results}
+
+        self.assertIn("parallel_capacitance", capacitor_ids)
+        self.assertIn("series_capacitance", capacitor_ids)
+        self.assertIn("rc_time_constant", rc_ids)
+
     def test_text_search_finds_coulomb_vector_force(self) -> None:
         results = search_physics_knowledge(
             "charges at triangle points calculate magnitude of net electric force vector"
@@ -186,6 +199,97 @@ class Type2SolverTests(unittest.TestCase):
         self.assertTrue(
             {"net_coulomb_force_right_triangle", "net_coulomb_force_equilateral", "coulomb_superposition"}.intersection(ids)
         )
+
+    def test_formula_bank_references_are_valid(self) -> None:
+        formula_ids = {item.id for item in FORMULAS}
+        law_ids = {item.id for item in LAW_STATEMENTS}
+        example_ids = {item.id for item in WORKED_EXAMPLES}
+        diagram_ids = {item.id for item in DIAGRAMS}
+
+        self.assertEqual(len(formula_ids), len(FORMULAS))
+        self.assertEqual(len(law_ids), len(LAW_STATEMENTS))
+        self.assertEqual(len(example_ids), len(WORKED_EXAMPLES))
+        self.assertEqual(len(diagram_ids), len(DIAGRAMS))
+
+        for law in LAW_STATEMENTS:
+            self.assertTrue(set(law.related_formula_ids).issubset(formula_ids))
+            self.assertTrue(set(law.diagram_ids).issubset(diagram_ids))
+        for example in WORKED_EXAMPLES:
+            self.assertTrue(set(example.related_formula_ids).issubset(formula_ids))
+            self.assertTrue(set(example.related_law_ids).issubset(law_ids))
+        for category in CATEGORIES:
+            self.assertTrue(set(category.formula_ids).issubset(formula_ids))
+            self.assertTrue(set(category.law_ids).issubset(law_ids))
+            self.assertTrue(set(category.example_ids).issubset(example_ids))
+            self.assertTrue(set(category.diagram_ids).issubset(diagram_ids))
+
+    def test_grouped_context_includes_rich_capacitor_context(self) -> None:
+        context = build_planner_knowledge_context(
+            "charged capacitor disconnected and connected to another uncharged capacitor energy after connection"
+        )
+
+        formula_ids = {item["id"] for item in context["formulas"]}
+        example_ids = {item["id"] for item in context["examples"]}
+        symbol_ids = {item["symbol"] for item in context["symbols"]}
+
+        self.assertIn("capacitor_energy_q2c", formula_ids)
+        self.assertIn("example_capacitor_charge_sharing", example_ids)
+        self.assertIn("C", symbol_ids)
+        self.assertIn("Q", symbol_ids)
+
+    def test_grouped_context_can_disable_symbols_examples_and_diagrams(self) -> None:
+        context = build_planner_knowledge_context(
+            "two capacitors in parallel topology",
+            KnowledgeSearchConfig(enabled_types=("formulas", "laws"), top_k=8),
+        )
+
+        self.assertIn("formulas", context)
+        self.assertIn("laws", context)
+        self.assertNotIn("symbols", context)
+        self.assertNotIn("examples", context)
+        self.assertNotIn("diagrams", context)
+        self.assertIn("parallel_capacitance", {item["id"] for item in context["formulas"]})
+
+    def test_grouped_context_can_include_mermaid_for_topology(self) -> None:
+        context = build_planner_knowledge_context("series and parallel capacitor circuit topology")
+
+        self.assertTrue(context["diagrams"])
+        self.assertTrue(any("flowchart" in item["mermaid"] for item in context["diagrams"]))
+
+    def test_solver_config_can_disable_context_types(self) -> None:
+        captured_context_text: list[str] = []
+
+        def handler(prompt: str) -> str:
+            marker = '"physics_knowledge":'
+            if marker in prompt:
+                start = prompt.index(marker)
+                end = prompt.find('"previous_plan"', start)
+                captured_context_text.append(prompt[start:end])
+            return json.dumps(
+                {
+                    "target": {"symbol": "answer", "description": "direct answer", "unit": ""},
+                    "answer": "parallel",
+                    "unit": "",
+                    "explanation": "Parallel branches share voltage.",
+                    "premises": ["Parallel branches share voltage."],
+                    "steps": [],
+                    "final_step": "",
+                    "missing_information": [],
+                    "status": "DIRECT_ANSWER",
+                }
+            )
+
+        solve_physics_question(
+            "Are two capacitors connected across the same two nodes in series or parallel?",
+            config=Type2SolverConfig(knowledge_context_types=("formulas", "laws")),
+            llm=FakeLLM(handler),
+        )
+
+        self.assertTrue(captured_context_text)
+        self.assertIn('"formulas"', captured_context_text[0])
+        self.assertIn('"laws"', captured_context_text[0])
+        self.assertNotIn('"symbols"', captured_context_text[0])
+        self.assertNotIn('"examples"', captured_context_text[0])
 
     def test_missing_formula_fallback_uses_model(self) -> None:
         def fallback(prompt: str) -> str:

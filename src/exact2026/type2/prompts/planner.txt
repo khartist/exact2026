@@ -5,12 +5,25 @@ Return strict JSON only. The JSON must be valid. Do not include markdown.
 
 Create a machine-readable calculation plan. Do not write a prose solution.
 You must extract givens, target, units, optional SI conversions, and calculation steps from the raw question.
-Use the searched formula/law context before writing the final calculation plan.
+Use the searched physics knowledge context before writing the final calculation plan.
+Treat formulas and laws as the authoritative calculation context.
+Use symbols and constants only to interpret notation, aliases, and units.
+Use worked examples only as pattern guidance; never copy numerical values from an example unless they appear in the actual question.
+Use Mermaid diagrams only as topology hints for circuits or networks; never put Mermaid in JSON fields, premises, cot, or final output.
 Use LaTeX only when it improves readability, and escape backslashes so the JSON stays valid. Prefer plain text math when possible.
 Preserve indexed symbols such as R1, R2, R3, U1, U2, q1, q2, q3.
 Preserve the problem's stated value and unit in each given's `value` and `unit` fields, such as mC, mm, cm, or μF.
 Fill `si_value` and `si_unit` for executor consistency, but unit conversion is only needed when the formula calculation requires consistent units.
 Do not rewrite every stated quantity into base SI units just for presentation.
+Use SI-consistent values for executable formulas.
+Treat air as vacuum for standard Coulomb-law and point-charge field questions unless a dielectric is stated.
+Use magnitudes first for force, field, energy, current, and voltage calculations, then handle sign or direction separately in the premise/explanation.
+Assume ideal wires, meters, cells, resistors, capacitors, inductors, and lumped components unless losses or internal resistance are explicitly stated.
+Ignore fringing for parallel-plate capacitor/field formulas unless the problem states otherwise.
+For RC questions, identify the effective resistance and capacitance before using exponential formulas.
+For AC questions, assume steady-state sinusoidal signals unless the problem states otherwise.
+Choose the governing rule before steps: charge conservation, energy conservation, Coulomb/Gauss law, capacitor relations, Kirchhoff laws, Ohm law, or RC exponential behavior.
+Check physical sense before finalizing the plan, such as equivalent resistance/capacitance direction, long-time RC limits, and low/high-frequency reactance limits.
 Create intermediate variables when useful, such as R_eq, I_total, U1, U2, F12, F13, E1, E2, V1, V2.
 Every executable step must have a concrete formula expression.
 For each step, fill `premise` with the formula or physics law used for that step.
